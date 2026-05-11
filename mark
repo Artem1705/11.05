@@ -1,0 +1,95 @@
+import numpy as np
+
+def f(x):
+    x1, x2 = x
+    return x1**2 + 6*x2**2 + x1*x2 + x1
+
+def grad_f(x):
+    x1, x2 = x
+    return np.array([2*x1 + x2 + 1,
+                     12*x2 + x1])
+
+def hessian(x=None):
+
+    return np.array([[2, 1],
+                     [1, 12]])
+
+def marquardt(x0, eps1=0.1, M=10, mu0=None):
+    x = np.array(x0, dtype=float)
+    H = hessian(x)
+
+    # Начальное μ
+    if mu0 is None:
+        mu = 5 * np.max(np.diag(H))
+    else:
+        mu = mu0
+
+    print("Метод Марквардта")
+    print(f"Начальная точка: x0 = {x}")
+    print(f"ε1 = {eps1}, M = {M}")
+    print(f"Начальное μ = {mu:.4f}")
+    print(f"Матрица Гессе H =\n{H}\n")
+    print(f"{'k':<3} {'x1':<12} {'x2':<12} {'f(x)':<14} {'||∇f||':<12} {'μ':<10} {'d[k]'}")
+    print("-" * 75)
+
+    k = 0
+    while k <= M:
+        g = grad_f(x)
+        norm_g = np.linalg.norm(g)
+        f_curr = f(x)
+
+        # Вывод текущей точки
+
+        # Шаг 4: проверка нормы градиента
+        if norm_g <= eps1:
+            print("\nОстанов: ||∇f(x)|| <= ε1")
+            print(f"\n{k:<3} {x[0]:<12.6f} {x[1]:<12.6f} {f_curr:<14.8f} {norm_g:<12.6f} {mu:<10.4f}")
+            break
+
+        # Шаг 5: проверка числа итераций
+        if k >= M:
+            print("\nДостигнуто максимальное число итераций M")
+            break
+
+        # Шаг 6–7: H + μI
+        H_mu = H + mu * np.eye(2)
+        # Шаг 8: обратная матрица
+        try:
+            H_mu_inv = np.linalg.inv(H_mu)
+        except np.linalg.LinAlgError:
+            print("Ошибка: матрица H+μI вырождена, увеличиваем μ")
+            mu *= 2
+            continue
+
+        # Шаг 9: направление
+        d = -H_mu_inv @ g
+        print(f"{k:<3} {x[0]:<12.6f} {x[1]:<12.6f} {f_curr:<14.8f} {norm_g:<12.6f} {mu:<10.4f} {d}")
+        # Шаг 10: новая точка
+        x_new = x + d
+        f_new = f(x_new)
+
+        # Шаг 11: проверка уменьшения функции
+        if f_new < f_curr:
+            # Успех: обновляем x, уменьшаем μ, k++
+
+            x = x_new
+            mu /= 2  # Шаг 12
+            k += 1
+        else:
+            # Неудача: увеличиваем μ, не меняем k
+            print(f"{'→':>4} f не уменьшилась ({f_new:.8f} >= {f_curr:.8f}), увеличиваем μ")
+            mu *= 2  # Шаг 13
+            # Повторяем цикл с теми же x и k
+    else:
+        pass
+
+    print(f"\nМинимум найден: x = ({x[0]:.8f}, {x[1]:.8f})")
+    print(f"Значение функции: f(x) = {f(x):.10f}")
+    # Аналитическое решение (для проверки)
+    x_opt = np.array([-12/23, 1/23])
+    print(f"Аналитическое решение: x1 = -12/23 = {-12/23:.8f}, x2 = 1/23 = {1/23:.8f}")
+    return x
+
+# Запуск
+x0 = [0.5, 1.0]
+marquardt(x0, eps1=0.1, M=10)
