@@ -1,0 +1,153 @@
+import numpy as np
+
+
+# Целевая функция
+def f(x):
+    x1, x2 = x
+    return x1 ** 2 + 6 * x2 ** 2 + x1 * x2 + x1
+
+
+# Градиент
+def grad_f(x):
+    x1, x2 = x
+    return np.array([2 * x1 + x2 + 1,
+                     12 * x2 + x1])
+
+
+def line_search(x, d):
+    def phi(t):
+        return f(x + t * d)
+
+    t0 = 0.0
+    f0 = phi(t0)
+    delta = 0.5  # начальный шаг
+    t1 = delta
+    f1 = phi(t1)
+
+    while f1 < f0:
+        delta *= 2.0
+        t0 = t1
+        f0 = f1
+        t1 = t0 + delta
+        f1 = phi(t1)
+    t_prev = t0 - delta / 2
+    f_prev = phi(t_prev)
+    # Убедимся, что f0 <= f_prev и f0 <= f1 (должно выполняться)
+    a = t_prev
+    b = t0
+    c = t1
+    # Если случайно f_prev < f0, сдвинем границы (редко)
+    if f_prev < f0:
+        c = t0
+        b = t_prev
+        a = t_prev - delta / 2
+    # Золотое сечение
+    gr = (np.sqrt(5) - 1) / 2  # 0.618...
+    tol = 1e-5
+    while abs(c - a) > tol:
+        # две внутренние точки
+        x1_ = c - gr * (c - a)
+        x2_ = a + gr * (c - a)
+        f1_ = phi(x1_)
+        f2_ = phi(x2_)
+        if f1_ < f2_:
+            c = x2_
+        else:
+            a = x1_
+    t_opt = (a + c) / 2.0
+    return t_opt
+
+
+# Метод ДФП
+def dfp(x0, eps1=0.1, eps2=0.15, M=10):
+    x = np.array(x0, dtype=float)
+    A = np.eye(2)  # начальная матрица (единичная)
+    k = 0
+    g_prev = None
+    x_prev = None
+
+    print("Метод Дэвидона – Флетчера – Пауэлла (ДФП)")
+    print(f"Начальная точка: {x}")
+    print(f"ε1 = {eps1}, ε2 = {eps2}, M = {M}\n")
+    print(f"{'k':<3} {'x1':<10} {'x2':<10} {'f(x)':<12} {'||∇f||':<10} {'||Δx||':<10} {'|Δf|':<10} {'t':<10} {'d[k]'}")
+    print("-" * 75)
+
+    while True:
+        g = grad_f(x)
+        norm_g = np.linalg.norm(g)
+        f_curr = f(x)
+        # Обновление матрицы A (для k >= 1)
+        if k == 0:
+            d = -A @ g
+        else:
+            dg = g - g_prev
+            dx = x - x_prev
+            # Защита от деления на ноль
+            dxT_dg = np.dot(dx, dg)
+            if abs(dxT_dg) < 1e-12:
+                print("Предупреждение: Δx·Δg ≈ 0, пропуск обновления A")
+            else:
+                Adg = A @ dg
+                dgT_Adg = np.dot(dg, Adg)
+                if abs(dgT_Adg) < 1e-12:
+                    print("Предупреждение: Δg·A·Δg ≈ 0")
+                else:
+                    term1 = np.outer(dx, dx) / dxT_dg
+                    term2 = np.outer(Adg, Adg) / dgT_Adg
+                    A = A + term1 - term2
+            d = -A @ g
+
+        # Строка вывода (изменения Δx и Δf будут известны после шага)
+        if k == 0:
+            print(f"{k:<3} {x[0]:<10.6f} {x[1]:<10.6f} {f_curr:<12.6f} {norm_g:<10.6f} {'—':<10} {'—':<10} {'—':<10} {d}")
+        else:
+            norm_dx = np.linalg.norm(x - x_prev)
+            df_abs = abs(f_curr - f(x_prev))
+            print(
+                f"{k:<3} {x[0]:<10.6f} {x[1]:<10.6f} {f_curr:<12.6f} {norm_g:<10.6f} {norm_dx:<10.6f} {df_abs:<10.6f} {d}",
+                end="")
+
+        # Критерии останова
+        if norm_g <= eps1:
+            print("\nОстанов: ||∇f|| <= ε1")
+            break
+        if k >= M:
+            print("\nДостигнуто максимальное число итераций M")
+            break
+        if k > 0:
+            norm_dx = np.linalg.norm(x - x_prev)
+            df_abs = abs(f_curr - f(x_prev))
+            if norm_dx <= eps2 and df_abs <= eps2:
+                print(f" {t_prev:<10.6f}")  # t с предыдущего шага
+                print("\nОстанов: ||Δx|| <= ε2 и |Δf| <= ε2")
+                break
+
+
+
+
+        # Одномерный поиск
+        t_opt = line_search(x, d)
+        x_new = x + t_opt * d
+
+        # Вывод t для предыдущего вызова (кроме k=0)
+        if k > 0:
+            print(f" {t_prev:<10.6f}")
+
+        # Сохраняем t для вывода на следующей итерации
+        t_prev = t_opt
+
+        # Подготовка к следующей итерации
+        g_prev = g
+        x_prev = x
+        x = x_new
+        k += 1
+
+    print(f"\nМинимум найден: x = ({x[0]:.8f}, {x[1]:.8f})")
+    print(f"f(x) = {f(x):.10f}")
+    # Аналитическое решение (для справки)
+    print(f"Аналитическое решение: x* = (-12/23, 1/23) ≈ ({-12 / 23:.8f}, {1 / 23:.8f}), f* = {-138 / 529:.10f}")
+    return x
+
+
+x0 = [0.5, 1.0]
+dfp(x0, eps1=0.1, eps2=0.15, M=10)
