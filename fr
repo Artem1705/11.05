@@ -1,0 +1,113 @@
+import numpy as np
+
+# Целевая функция f(x1, x2) = x1^2 + 6*x2^2 + x1*x2 + x1
+def f(x):
+    x1, x2 = x
+    return x1**2 + 6*x2**2 + x1*x2 + x1
+
+# Градиент (аналитический, через матрицу A и вектор b)
+A = np.array([[2, 1],
+              [1, 12]])   # A из представления f(x) = 0.5*x^T A x + b^T x
+b = np.array([1, 0])
+
+def grad_f(x):
+    return A @ x + b
+
+def optimal_step_fr(x, d):
+    """
+    Аналитический оптимальный шаг для квадратичной функции f(x)=0.5 x^T A x + b^T x
+    вдоль направления d:
+    t = - (d^T ∇f(x)) / (d^T A d)
+    """
+    g = grad_f(x)
+    numerator = -np.dot(d, g)
+    denominator = np.dot(d, A @ d)
+    if abs(denominator) < 1e-12:
+        return 0.0
+    return numerator / denominator
+
+def fletcher_reeves(x0, eps1=0.1, eps2=0.15, M=10):
+    x = np.array(x0, dtype=float)
+    k = 0
+    g = grad_f(x)
+    d = -g                          # начальное направление – антиградиент
+    f_curr = f(x)
+    x_prev = None
+    f_prev = None
+    t_prev = None                   # длина шага на предыдущей итерации
+
+    print("Метод Флетчера–Ривса (сопряжённых градиентов)")
+    print(f"Начальная точка: x0 = {x}")
+    print(f"ε1 = {eps1}, ε2 = {eps2}, M = {M}\n")
+    print(f"{'k':<3} {'x1':<10} {'x2':<10} {'f(x)':<12} {'||∇f||':<10} {'||Δx||':<10} {'|Δf|':<10} {'t':<10} {'β':<10}")
+    print("-" * 85)
+
+    while True:
+        g = grad_f(x)
+        norm_g = np.linalg.norm(g)
+        f_curr = f(x)
+
+        # Вывод строки (для k=0 нет Δx и Δf)
+        if k == 0:
+            print(f"{k:<3} {x[0]:<10.6f} {x[1]:<10.6f} {f_curr:<12.6f} {norm_g:<10.6f} {'—':<10} {'—':<10} {'—':<10} {'—':<10}")
+        else:
+            norm_dx = np.linalg.norm(x - x_prev)
+            df_abs = abs(f_curr - f_prev)
+            beta = np.dot(g, g) / np.dot(g_prev, g_prev)  # β_k для вывода (формула Флетчера–Ривса)
+            print(f"{k:<3} {x[0]:<10.6f} {x[1]:<10.6f} {f_curr:<12.6f} {norm_g:<10.6f} {norm_dx:<10.6f} {df_abs:<10.6f} {t_prev:<10.6f} {beta:<10.6f}")
+
+        # Критерии останова
+        if norm_g <= eps1:
+            print("\nОстанов: ||∇f|| <= ε1")
+            break
+        if k >= M:
+            print("\nДостигнуто максимальное число итераций M")
+            break
+        if k > 0:   # для k=0 не с чем сравнивать
+            norm_dx = np.linalg.norm(x - x_prev)
+            df_abs = abs(f_curr - f_prev)
+            if norm_dx <= eps2 and df_abs <= eps2:
+                print("\nОстанов: ||Δx|| <= ε2 и |Δf| <= ε2")
+                break
+
+        # Сохраняем текущие значения для следующей итерации
+        g_prev = g.copy()
+        x_prev = x.copy()
+        f_prev = f_curr
+
+        # Вычисляем оптимальный шаг t_k
+        t = optimal_step_fr(x, d)
+        t_prev = t
+
+        # Шаг 10: x^{k+1} = x^k + t_k d^k
+        x_new = x + t * d
+
+        # Подготовка к следующей итерации
+        if k == 0:
+            # Для k=0 новое направление вычисляется после получения x^1 и ∇f(x^1)
+            # Пока просто обновим x и позже вычислим d для следующего шага
+            x = x_new
+            k += 1
+            # Теперь вычислим новое направление: d^1 = -∇f(x^1) + β_1 d^0
+            g_new = grad_f(x)
+            beta = np.dot(g_new, g_new) / np.dot(g_prev, g_prev)
+            d = -g_new + beta * d
+        else:
+            # Для k >= 1: сначала вычисляем β, затем новое направление
+            x = x_new
+            k += 1
+            g_new = grad_f(x)
+            beta = np.dot(g_new, g_new) / np.dot(g_prev, g_prev)
+            d = -g_new + beta * d
+
+    print(f"\nМинимум найден: x = ({x[0]:.8f}, {x[1]:.8f})")
+    print(f"f(x) = {f(x):.10f}")
+    # Аналитическое решение (для справки)
+    x_opt = np.linalg.solve(A, -b)   # A x + b = 0 => x = -A^{-1}b
+    print(f"Аналитическое решение: x* = ({x_opt[0]:.8f}, {x_opt[1]:.8f})")
+    print(f"f* = {f(x_opt):.10f}")
+    return x
+
+# Запуск
+x0 = [0.5, 1.0]
+fletcher_reeves(x0, eps1=0.1, eps2=0.15, M=10)
